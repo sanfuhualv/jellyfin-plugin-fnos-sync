@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head><title>飞牛实时同步</title></head><body>
+<div id="FnosSyncPage" data-role="page" class="page type-interior pluginConfigurationPage">
+<div data-role="content"><div class="content-primary">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:1em;flex-wrap:wrap">
+<h1 style="display:flex;align-items:center;gap:12px"><img id="fnIcon" alt="" width="48" height="48" style="border-radius:10px">飞牛实时同步</h1>
+<a id="fnGithub" class="emby-button raised" href="https://github.com/sanfuhualv/jellyfin-plugin-fnos-sync" target="_blank" rel="noopener noreferrer" aria-label="打开 GitHub 项目（新标签页）" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none"><span>查看 GitHub</span></a>
+</div>
+<p id="fnHealth" role="status" aria-live="polite" style="padding:12px;border-left:4px solid #60a5fa;white-space:pre-wrap">正在读取实际同步状态…</p>
+<p>Jellyfin 状态变化推送到飞牛；查看媒体时后台核验并发送用户状态更新通知。按计划核对已配置映射。密码加密保存，服务器重启后自动恢复连接。首次请先测试连接和预览映射。</p>
+<form id="fnForm">
+<label class="checkboxContainer"><input is="emby-checkbox" id="fnEnabled" type="checkbox"><span>启用同步（会写入两端状态）</span></label>
+<div class="inputContainer"><label class="inputLabel" for="fnUrl">飞牛影音原生地址</label><input is="emby-input" id="fnUrl" required autocomplete="off"></div>
+<div class="inputContainer"><label class="inputLabel" for="fnUsername">飞牛用户名</label><input is="emby-input" id="fnUsername" required autocomplete="off"></div>
+<div class="inputContainer"><label class="inputLabel" for="fnPassword">飞牛密码</label><input is="emby-input" id="fnPassword" type="password" autocomplete="new-password"></div>
+<div class="inputContainer"><label class="inputLabel" for="fnUser">Jellyfin 用户</label><select is="emby-select" id="fnUser"></select></div>
+<p>轻量检查的间隔和完整核对的执行时间，请在 <a href="#/dashboard/tasks">控制台 → 计划任务 → 飞牛媒体库同步</a> 中设置。</p>
+<div class="inputContainer"><label class="inputLabel" for="fnCache">页面状态缓存（秒，0 表示每次读取均可刷新）</label><input is="emby-input" id="fnCache" type="number" min="0" max="3600" value="5"></div>
+<div class="inputContainer"><label class="inputLabel" for="fnProgress">连续播放进度合并间隔（秒）</label><input is="emby-input" id="fnProgress" type="number" min="1" max="3600" value="30"></div>
+<label class="checkboxContainer"><input is="emby-checkbox" id="fnDailyDiscover" type="checkbox" checked><span>完整核对时发现新媒体映射（仅接受唯一匹配）</span></label>
+<div class="inputContainer"><label class="inputLabel" for="fnInitial">新映射首次策略</label><select is="emby-select" id="fnInitial"><option value="baseline">只建立基线，保留已有差异</option><option value="fnos">首次以飞牛为准</option><option value="jellyfin">首次以 Jellyfin 为准</option></select></div>
+<div class="inputContainer"><label class="inputLabel" for="fnConflict">双方同时修改播放状态</label><select is="emby-select" id="fnConflict"><option value="preserve">保留冲突，不猜先后（推荐）</option><option value="most-progress">已看/进度更大优先（可能覆盖清零和重看）</option></select></div>
+<div class="inputContainer"><label class="inputLabel" for="fnMappings">媒体映射（JSON 数组，可由“发现映射”生成，检查后保存）</label><textarea id="fnMappings" rows="10" style="width:100%;box-sizing:border-box;font-family:monospace"></textarea></div>
+<button is="emby-button" type="submit" class="raised button-submit block"><span>保存设置</span></button>
+</form>
+<div style="display:flex;gap:1em;flex-wrap:wrap;margin:1.5em 0">
+<button is="emby-button" type="button" id="fnTest" class="raised">测试连接</button>
+<button is="emby-button" type="button" id="fnDiscover" class="raised">发现映射（只读）</button>
+<button is="emby-button" type="button" id="fnStatus" class="raised">刷新运行记录</button>
+</div>
+<p id="fnMessage" role="status" aria-live="polite" style="min-height:2em;white-space:pre-wrap"></p>
+<pre id="fnOutput" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+</div></div>
+<script>
+(function(){
+const page=document.querySelector('#FnosSyncPage');let current={};
+const get=id=>page.querySelector('#'+id);
+get('fnIcon').src=ApiClient.getUrl('FnosSync/icon.png');
+async function health(){const s=await api('Status');get('fnPassword').placeholder=s.passwordConfigured?'已保存密码':'';get('fnHealth').textContent=(s.credentialError?s.credentialError:s.authenticationRequired?'等待保存的飞牛密码，自动同步已暂停':s.enabled?'同步已启用':'同步已停用，点击收藏不会推送')+' · 已保存 '+s.mappings+' 条媒体映射 · 已建立 '+s.baselines+' 条基线 · 待处理 '+s.pending+' 项。\n未匹配的影片不会写入；“发现映射”生成的是预览，必须保存才生效。';}
+async function api(path,data){const r=await fetch(ApiClient.getUrl('FnosSync/'+path),{method:data===undefined?'GET':'POST',headers:{'Authorization':'MediaBrowser Token='+String.fromCharCode(34)+ApiClient.accessToken()+String.fromCharCode(34),'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});if(!r.ok)throw Error('HTTP '+r.status+': '+(await r.text()).slice(0,300));return r.status===204?null:r.json();}
+async function action(button,fn){const old=button.textContent;button.disabled=true;button.textContent='处理中…';get('fnMessage').textContent='';try{await fn();}catch(e){get('fnMessage').textContent=e.message;}finally{button.disabled=false;button.textContent=old;}}
+page.addEventListener('viewshow',async()=>{try{const info=await api('Configuration');current=info.configuration;const users=await ApiClient.getUsers();get('fnUser').replaceChildren(...users.map(u=>{const o=document.createElement('option');o.value=u.Id;o.textContent=u.Name;return o;}));get('fnEnabled').checked=current.Enabled;get('fnUrl').value=current.FnosUrl;get('fnUsername').value=current.FnosUsername;get('fnPassword').value='';get('fnPassword').placeholder=info.passwordConfigured?'已保存密码':'';get('fnUser').value=current.JellyfinUserId;get('fnCache').value=current.DetailCacheSeconds;get('fnProgress').value=current.ProgressPushSeconds;get('fnDailyDiscover').checked=current.DiscoverNewItemsDaily!==false;get('fnInitial').value=current.InitialPolicy;get('fnConflict').value=current.ConflictPolicy;get('fnMappings').value=JSON.stringify(current.Mappings||[],null,2);await health();}catch(e){get('fnMessage').textContent=e.message;}});
+get('fnForm').addEventListener('submit',e=>{e.preventDefault();action(get('fnForm').querySelector('button'),async()=>{const configuration={...current,Enabled:get('fnEnabled').checked,FnosUrl:get('fnUrl').value.trim(),FnosUsername:get('fnUsername').value,JellyfinUserId:get('fnUser').value,DetailCacheSeconds:Number(get('fnCache').value),ProgressPushSeconds:Number(get('fnProgress').value),DiscoverNewItemsDaily:get('fnDailyDiscover').checked,TimeZone:current.TimeZone||'Asia/Shanghai',InitialPolicy:get('fnInitial').value,ConflictPolicy:get('fnConflict').value,Mappings:JSON.parse(get('fnMappings').value||'[]')};await api('Configuration',{configuration,password:get('fnPassword').value});current=configuration;get('fnPassword').value='';get('fnPassword').placeholder='已保存密码';get('fnMessage').textContent='已保存。';await health();});});
+for(const [id,path]of [['fnTest','Test'],['fnStatus','Status']])get(id).onclick=()=>action(get(id),async()=>{const result=await api(path,path==='Status'?undefined:{});get('fnOutput').textContent=JSON.stringify(result,null,2);get('fnMessage').textContent='完成';});
+get('fnDiscover').onclick=()=>action(get('fnDiscover'),async()=>{const result=await api('Discover',{});get('fnMappings').value=JSON.stringify(result.mappings,null,2);get('fnOutput').textContent=JSON.stringify({unmatched:result.unmatched,elapsedMs:result.elapsedMs,note:result.note},null,2);get('fnMessage').textContent='映射预览已生成，检查后点击保存才生效。';});
+})();
+</script></div></body></html>

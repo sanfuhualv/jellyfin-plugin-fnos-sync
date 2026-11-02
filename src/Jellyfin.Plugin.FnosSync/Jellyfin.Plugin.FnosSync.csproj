@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>1.0.0</Version>
+    <AssemblyName>Jellyfin.Plugin.FnosSync</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <Deterministic>true</Deterministic>
+    <JellyfinReferences Condition="'$(JellyfinReferences)' == ''">$(MSBuildThisFileDirectory)../../.build/references</JellyfinReferences>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="$(JellyfinReferences)/*.dll" Exclude="$(JellyfinReferences)/System*.dll;$(JellyfinReferences)/Microsoft.AspNetCore*.dll;$(JellyfinReferences)/Microsoft.Extensions*.dll;$(JellyfinReferences)/Microsoft.Win32*.dll;$(JellyfinReferences)/Microsoft.VisualBasic*.dll;$(JellyfinReferences)/Microsoft.CSharp.dll;$(JellyfinReferences)/netstandard.dll;$(JellyfinReferences)/mscorlib.dll;$(JellyfinReferences)/WindowsBase.dll"><Private>false</Private></Reference>
+    <EmbeddedResource Include="configuration.html" />
+    <EmbeddedResource Include="Client.js" />
+    <EmbeddedResource Include="../../assets/icon.png" LogicalName="Jellyfin.Plugin.FnosSync.icon.png" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="Jellyfin.Plugin.FnosSync.LICENSE" />
+    <EmbeddedResource Include="../../THIRD_PARTY_NOTICES.md" LogicalName="Jellyfin.Plugin.FnosSync.THIRD_PARTY_NOTICES.md" />
+    <EmbeddedResource Include="../../README.md" LogicalName="Jellyfin.Plugin.FnosSync.README.md" />
+  </ItemGroup>
+  <Target Name="CheckJellyfinReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(JellyfinReferences)/MediaBrowser.Controller.dll')" Text="Missing Jellyfin reference assemblies. Run scripts/prepare-references.sh or provide JellyfinReferences for the supported server version." />
+  </Target>
+</Project>
